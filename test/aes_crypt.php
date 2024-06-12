@@ -1,39 +1,72 @@
 <?php
 
+ini_set('memory_limit', '2G'); // 메모리 제한을 2G로 설정
+
+require '../vendor/autoload.php';
+
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+// 암호화키(디비명)|포트
+$crypt_keyData = array(
+    'test_demo' => '12334556&^1230809|6601'
+);
+
+$crypt_realKey = explode("|", $crypt_keyData['test_demo']);
+$crypt_passwd = $crypt_realKey[0]; // 암호화 키
+$crypt_port = $crypt_realKey[1]; // 통신 포트
+$iv = "0123456789012345"; // 초기화 벡터
+
 // FFI를 사용하여 .so 파일 로드
 $ffi = FFI::cdef("
     const char* encrypt(const char* plaintext, const char* key, const char* iv, int key_length);
     const char* decrypt(const char* ciphertext, const char* key, const char* iv, int key_length);
 ", "../build/libaes_crypt.so");
 
-// 암호화할 데이터
-$phoneNumber = "0123456789"; // 10자리 전화번호
-$key = "01234567890123456789012345678901"; // 32 bytes for AES-256
-$iv = "0123456789012345"; // 16 bytes for AES block size
+// 엑셀 파일 로드
+$inputFileName = './sample.xlsx';
+$spreadsheet = IOFactory::load($inputFileName);
+$sheet = $spreadsheet->getActiveSheet();
 
 // 암호화 시간 측정
 $startEncryptTime = microtime(true);
 
-for ($i = 0; $i < 20000; $i++) {
-    $ciphertext = $ffi->encrypt($phoneNumber, $key, $iv, 256);
+foreach ($sheet->getRowIterator() as $row) {
+    $cellIterator = $row->getCellIterator();
+    $cellIterator->setIterateOnlyExistingCells(false); // 모든 셀을 반복
+
+    foreach ($cellIterator as $cell) {
+        $originalValue = $cell->getValue();
+        if (!empty($originalValue)) {
+            // 각 셀의 데이터를 문자열로 변환하여 암호화
+            $originalValueStr = (string)$originalValue;
+            $encryptedValue = $ffi->encrypt($originalValueStr, $crypt_passwd, $iv, 256);
+            $cell->setValue($encryptedValue);
+        }
+    }
 }
 
 $endEncryptTime = microtime(true);
 $encryptTime = $endEncryptTime - $startEncryptTime;
-echo "Time taken to encrypt 20000 times: " . $encryptTime . " seconds\n";
+echo "Time taken to encrypt the spreadsheet: " . $encryptTime . " seconds\n";
 
-// 복호화 시간 측정
-$startDecryptTime = microtime(true);
+// 엑셀 파일을 다시 저장 (Chunked Writing)
+$outputFileName = './encrypted_file.xlsx';
+$writer = new Xlsx($spreadsheet);
 
-for ($i = 0; $i < 20000; $i++) {
-    $decrypted = $ffi->decrypt($ciphertext, $key, $iv, 256);
+// Chunked writing 설정
+$writer->setPreCalculateFormulas(false);
+
+$chunkSize = 1000; // Chunk 크기 설정
+$sheetIndex = $spreadsheet->getActiveSheetIndex();
+
+for ($startRow = 1; $startRow <= $sheet->getHighestRow(); $startRow += $chunkSize) {
+    $writer->setWriteType(\PhpOffice\PhpSpreadsheet\Writer\BaseWriter::WRITE_MODE_APPEND);
+    $writer->setWriteBuffer($chunkSize);
+    $writer->save($outputFileName);
 }
 
-$endDecryptTime = microtime(true);
-$decryptTime = $endDecryptTime - $startDecryptTime;
-echo "Time taken to decrypt 20000 times: " . $decryptTime . " seconds\n";
-
-// 최종 복호화 결과 출력
-echo "Final decrypted value: " . $decrypted . "\n";
+echo "File saved to " . $outputFileName . "\n";
 
 ?>

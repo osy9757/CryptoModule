@@ -1,0 +1,4 @@
+/Users/osy/Desktop/CryptoModule/build/CMakeFiles/aes_crypt.dir
+/Users/osy/Desktop/CryptoModule/build/CMakeFiles/test_so.dir
+/Users/osy/Desktop/CryptoModule/build/CMakeFiles/edit_cache.dir
+/Users/osy/Desktop/CryptoModule/build/CMakeFiles/rebuild_cache.dir
