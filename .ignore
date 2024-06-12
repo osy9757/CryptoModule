@@ -1,6 +1,0 @@
-build/*
-sample/*
-!sample/
-CMakeLists.txt
-composer.json
-composer.lock
