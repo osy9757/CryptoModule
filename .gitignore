@@ -4,3 +4,4 @@ sample/*
 CMakeLists.txt
 composer.json
 composer.lock
+test/nan*
