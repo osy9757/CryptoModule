@@ -108,7 +108,6 @@ std::string AESCrypt::decrypt(const std::string &cipherText, const std::string &
     return decrypted_result;
 }
 
-// 전역 버퍼에 결과 저장
 char encrypted_buffer[1024];
 char decrypted_buffer[1024];
 
