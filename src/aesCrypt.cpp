@@ -22,7 +22,7 @@ namespace {
     }
 }
 
-// 전역 변수로 암호화 및 복호화 결과 저장
+// 전역 변수로 암호화 및 복호화 결과 저장 
 std::string encrypted_result;
 std::string decrypted_result;
 
