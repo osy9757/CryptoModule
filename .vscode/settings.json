@@ -1,7 +1,0 @@
-{
-  "files.associations": {
-    "*.html": "php",
-    "iostream": "cpp",
-    "string": "cpp"
-  }
-}
