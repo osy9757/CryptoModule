@@ -80,8 +80,11 @@ extern "C" {
 
     const char* hcrypt_crypt(hcrypt* hc, char mode, const char* input) {
         std::string result = hc->crypt(mode, input);
-        char* result_cstr = new char[result.size() + 1];
+        char* result_cstr = (char*)malloc(result.size() + 1);
         std::strcpy(result_cstr, result.c_str());
         return result_cstr;
     }
 }
+
+
+//g++ -shared -o hcrypt.dll hcrypt.cpp -I../include -I"C:/Program Files/OpenSSL-Win64/include" -L"C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd" "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd/libssl.lib" "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd/libcrypto.lib"
