@@ -3,6 +3,7 @@
 #include <openssl/rand.h>
 #include <cstring>
 #include <stdexcept>
+#include <cstdlib> // for malloc and free
 
 hcrypt::hcrypt(const std::string& serverIP, int port) {
     // 서버IP와 포트를 사용한 초기화 로직이 필요하다면 추가
@@ -78,11 +79,15 @@ extern "C" {
         hc->setKey(key);
     }
 
-    const char* hcrypt_crypt(hcrypt* hc, char mode, const char* input) {
+    const char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input) {
         std::string result = hc->crypt(mode, input);
         char* result_cstr = (char*)malloc(result.size() + 1);
         std::strcpy(result_cstr, result.c_str());
         return result_cstr;
+    }
+
+    void hcrypt_free_result(const char* result) {
+        free((void*)result);
     }
 }
 
