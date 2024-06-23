@@ -6,6 +6,7 @@
 class hcrypt {
 public:
     hcrypt(const std::string& serverIP, int port);
+    ~hcrypt(); // 소멸자 선언
     void setKey(const std::string& key);
     std::string crypt(char mode, const std::string& input);
 
@@ -20,7 +21,8 @@ private:
 extern "C" {
     hcrypt* hcrypt_new(const char* serverIP, int port);
     void hcrypt_setKey(hcrypt* hc, const char* key);
-    const char* hcrypt_crypt(hcrypt* hc, char mode, const char* input);
+    const char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input);
+    void hcrypt_free_result(const char* result);
 }
 
 #endif
