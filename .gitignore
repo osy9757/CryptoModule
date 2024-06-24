@@ -7,3 +7,5 @@ composer.lock
 .vscode
 test/*
 test_web/*
+vender/*
+vcpkg/*
