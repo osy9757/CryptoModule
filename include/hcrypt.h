@@ -34,8 +34,8 @@ extern "C" {
     HCRYPT_API hcrypt* hcrypt_new(const char* serverIP, int port);
     HCRYPT_API void hcrypt_setKey(hcrypt* hc, const char* key);
     HCRYPT_API void hcrypt_setIV(hcrypt* hc, const char* iv);
-    HCRYPT_API const char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input);
-    HCRYPT_API void hcrypt_free_result(const char* result);
+    HCRYPT_API char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input);
+    HCRYPT_API void hcrypt_free_result(char* result);
     HCRYPT_API void hcrypt_delete(hcrypt* hc);
 }
 

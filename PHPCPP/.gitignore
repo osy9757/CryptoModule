@@ -1,0 +1,9 @@
+*.d
+*.o
+*.a
+*.so
+*.txt
+*.a.*
+*.so.*
+build/
+.vscode/

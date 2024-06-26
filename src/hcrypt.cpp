@@ -4,15 +4,24 @@
 #include <openssl/rand.h>
 #include <cstring>
 #include <stdexcept>
+#include <iostream>
+
+static bool openssl_initialized = false;
 
 void openssl_init() {
-    OpenSSL_add_all_algorithms();
-    ERR_load_crypto_strings();
+    if (!openssl_initialized) {
+        OpenSSL_add_all_algorithms();
+        ERR_load_crypto_strings();
+        openssl_initialized = true;
+    }
 }
 
 void openssl_cleanup() {
-    EVP_cleanup();
-    ERR_free_strings();
+    if (openssl_initialized) {
+        EVP_cleanup();
+        ERR_free_strings();
+        openssl_initialized = false;
+    }
 }
 
 hcrypt::hcrypt(const std::string& serverIP, int port) {
@@ -101,7 +110,7 @@ extern "C" {
         hc->setIV(iv);
     }
 
-    const char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input) {
+    char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input) {
         try {
             std::string result = hc->crypt(mode, input);
             size_t size = result.size();
@@ -110,12 +119,16 @@ extern "C" {
             std::memcpy(result_cstr, result.c_str(), size);
             result_cstr[size] = '\0'; // null-terminate the string
             return result_cstr;
+        } catch (const std::exception& e) {
+            std::cerr << "Exception caught in hcrypt_crypt_alloc: " << e.what() << std::endl;
+            return nullptr;
         } catch (...) {
+            std::cerr << "Unknown exception caught in hcrypt_crypt_alloc." << std::endl;
             return nullptr;
         }
     }
 
-    void hcrypt_free_result(const char* result) {
+    void hcrypt_free_result(char* result) {
         delete[] result;
     }
 
