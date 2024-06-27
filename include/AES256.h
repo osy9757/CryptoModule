@@ -1,27 +1,34 @@
-#ifndef AES256_H
-#define AES256_H
+#ifndef HCRYPT_H
+#define HCRYPT_H
 
 #include <string>
-#include <vector>
-#include <openssl/aes.h>
-#include <openssl/rand.h>
+#include <openssl/evp.h>
 
-class AES256 {
+class hcrypt {
 public:
-    AES256(const std::string& key);
-    ~AES256();
-    std::string encrypt(const std::string& plaintext);
-    std::string decrypt(const std::string& ciphertext);
+    hcrypt(const std::string& serverIP, int port);
+    ~hcrypt();
+
+    void setKey(const std::string& key);
+    void setIV(const std::string& iv);
+    std::string crypt(char mode, const std::string& input);
 
 private:
-    AES_KEY enc_key;
-    AES_KEY dec_key;
-    std::vector<uint8_t> key;
-    std::vector<uint8_t> iv;
+    std::string key;
+    std::string iv;
 
-    void pad(std::vector<uint8_t>& buffer);
-    void unpad(std::vector<uint8_t>& buffer);
-    void generateIV();
+    std::string encrypt(const std::string& plaintext);
+    std::string decrypt(const std::string& ciphertext);
+    std::string aes_crypt(const std::string& input, bool is_encrypt);
 };
 
-#endif // AES256_H
+extern "C" {
+    hcrypt* hcrypt_new(const char* serverIP, int port);
+    void hcrypt_setKey(hcrypt* hc, const char* key);
+    void hcrypt_setIV(hcrypt* hc, const char* iv);
+    char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input);
+    void hcrypt_free_result(char* result);
+    void hcrypt_delete(hcrypt* hc);
+}
+
+#endif // HCRYPT_H

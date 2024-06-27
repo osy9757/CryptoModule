@@ -1,138 +1,96 @@
-#include "hcrypt.h"
 #include <openssl/evp.h>
-#include <openssl/err.h>
+#include <openssl/aes.h>
 #include <openssl/rand.h>
 #include <cstring>
-#include <stdexcept>
-#include <iostream>
+#include <string>
+#include <vector>
 
-static bool openssl_initialized = false;
+class hcrypt {
+public:
+    hcrypt() {}
 
-void openssl_init() {
-    if (!openssl_initialized) {
-        OpenSSL_add_all_algorithms();
-        ERR_load_crypto_strings();
-        openssl_initialized = true;
-    }
-}
-
-void openssl_cleanup() {
-    if (openssl_initialized) {
-        EVP_cleanup();
-        ERR_free_strings();
-        openssl_initialized = false;
-    }
-}
-
-hcrypt::hcrypt(const std::string& serverIP, int port) {
-    openssl_init();
-}
-
-hcrypt::~hcrypt() {
-    openssl_cleanup();
-}
-
-void hcrypt::setKey(const std::string& key) {
-    this->key = key;
-}
-
-void hcrypt::setIV(const std::string& iv) {
-    this->iv = iv;
-}
-
-std::string hcrypt::crypt(char mode, const std::string& input) {
-    if (mode == 'e') {
-        return encrypt(input);
-    } else if (mode == 'd') {
-        return decrypt(input);
-    }
-    throw std::invalid_argument("Invalid mode: use 'e' for encryption and 'd' for decryption");
-}
-
-std::string hcrypt::encrypt(const std::string& plaintext) {
-    return aes_crypt(plaintext, true);
-}
-
-std::string hcrypt::decrypt(const std::string& ciphertext) {
-    return aes_crypt(ciphertext, false);
-}
-
-std::string hcrypt::aes_crypt(const std::string& input, bool is_encrypt) {
-    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-    if (!ctx) throw std::runtime_error("Failed to create EVP_CIPHER_CTX");
-
-    const EVP_CIPHER* cipher = EVP_aes_256_cbc();
-    if (is_encrypt) {
-        if (1 != EVP_EncryptInit_ex(ctx, cipher, NULL, (unsigned char*)key.c_str(), (unsigned char*)iv.c_str()))
-            throw std::runtime_error("EncryptInit failed");
-    } else {
-        if (1 != EVP_DecryptInit_ex(ctx, cipher, NULL, (unsigned char*)key.c_str(), (unsigned char*)iv.c_str()))
-            throw std::runtime_error("DecryptInit failed");
+    void setKey(const unsigned char *key) {
+        std::memcpy(this->key, key, 32); // AES-256 key size is 32 bytes
     }
 
-    std::string output;
-    output.resize(input.size() + EVP_CIPHER_block_size(cipher));
+    std::string encrypt(const std::string &plaintext) {
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        int len;
+        int ciphertext_len;
+        unsigned char iv[16];
+        std::vector<unsigned char> ciphertext(plaintext.size() + AES_BLOCK_SIZE);
 
-    int len;
-    if (is_encrypt) {
-        if (1 != EVP_EncryptUpdate(ctx, (unsigned char*)&output[0], &len, (const unsigned char*)input.c_str(), static_cast<int>(input.size())))
-            throw std::runtime_error("EncryptUpdate failed");
-    } else {
-        if (1 != EVP_DecryptUpdate(ctx, (unsigned char*)&output[0], &len, (const unsigned char*)input.c_str(), static_cast<int>(input.size())))
-            throw std::runtime_error("DecryptUpdate failed");
+        // Generate random IV
+        RAND_bytes(iv, sizeof(iv));
+        EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
+        
+        // Encrypt the plaintext
+        EVP_EncryptUpdate(ctx, ciphertext.data(), &len, reinterpret_cast<const unsigned char*>(plaintext.c_str()), static_cast<int>(plaintext.size()));
+        ciphertext_len = len;
+
+        // Finalize encryption
+        EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len);
+        ciphertext_len += len;
+
+        EVP_CIPHER_CTX_free(ctx);
+
+        std::string encrypted(reinterpret_cast<char*>(ciphertext.data()), ciphertext_len);
+        std::string iv_str(reinterpret_cast<char*>(iv), sizeof(iv));
+        return iv_str + encrypted;
     }
 
-    int output_len = len;
-    if (is_encrypt) {
-        if (1 != EVP_EncryptFinal_ex(ctx, (unsigned char*)&output[0] + len, &len))
-            throw std::runtime_error("EncryptFinal failed");
-    } else {
-        if (1 != EVP_DecryptFinal_ex(ctx, (unsigned char*)&output[0] + len, &len))
-            throw std::runtime_error("DecryptFinal failed");
-    }
-    output_len += len;
+    std::string decrypt(const std::string &ciphertext) {
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        int len;
+        int plaintext_len;
+        std::vector<unsigned char> plaintext(ciphertext.size());
+        unsigned char iv[16];
 
-    EVP_CIPHER_CTX_free(ctx);
-    output.resize(output_len);
-    return output;
-}
+        // Extract IV from ciphertext
+        std::memcpy(iv, ciphertext.c_str(), sizeof(iv));
+        const unsigned char *encrypted = reinterpret_cast<const unsigned char*>(ciphertext.c_str()) + sizeof(iv);
+
+        EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
+        EVP_DecryptUpdate(ctx, plaintext.data(), &len, encrypted, static_cast<int>(ciphertext.size()) - sizeof(iv));
+        plaintext_len = len;
+
+        // Finalize decryption
+        EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len);
+        plaintext_len += len;
+
+        EVP_CIPHER_CTX_free(ctx);
+
+        return std::string(reinterpret_cast<char*>(plaintext.data()), plaintext_len);
+    }
+
+private:
+    unsigned char key[32];
+};
 
 extern "C" {
-    hcrypt* hcrypt_new(const char* serverIP, int port) {
-        return new hcrypt(serverIP, port);
+    __declspec(dllexport) hcrypt* aes_create() {
+        return new hcrypt();
     }
 
-    void hcrypt_setKey(hcrypt* hc, const char* key) {
-        hc->setKey(key);
+    __declspec(dllexport) void aes_destroy(hcrypt* aes) {
+        delete aes;
     }
 
-    void hcrypt_setIV(hcrypt* hc, const char* iv) {
-        hc->setIV(iv);
+    __declspec(dllexport) void aes_set_key(hcrypt* aes, const unsigned char* key) {
+        aes->setKey(key);
     }
 
-    char* hcrypt_crypt_alloc(hcrypt* hc, char mode, const char* input) {
-        try {
-            std::string result = hc->crypt(mode, input);
-            size_t size = result.size();
-            char* result_cstr = new char[size + 1];
-            if (!result_cstr) return nullptr;
-            std::memcpy(result_cstr, result.c_str(), size);
-            result_cstr[size] = '\0'; // null-terminate the string
-            return result_cstr;
-        } catch (const std::exception& e) {
-            std::cerr << "Exception caught in hcrypt_crypt_alloc: " << e.what() << std::endl;
-            return nullptr;
-        } catch (...) {
-            std::cerr << "Unknown exception caught in hcrypt_crypt_alloc." << std::endl;
-            return nullptr;
-        }
+    __declspec(dllexport) char* aes_encrypt(hcrypt* aes, const char* plaintext) {
+        std::string ciphertext = aes->encrypt(plaintext);
+        char* cstr = new char[ciphertext.size() + 1];
+        strcpy_s(cstr, ciphertext.size() + 1, ciphertext.c_str());
+        return cstr;
     }
 
-    void hcrypt_free_result(char* result) {
-        delete[] result;
-    }
-
-    void hcrypt_delete(hcrypt* hc) {
-        delete hc;
+    __declspec(dllexport) char* aes_decrypt(hcrypt* aes, const char* ciphertext) {
+        std::string plaintext = aes->decrypt(ciphertext);
+        char* cstr = new char[plaintext.size() + 1];
+        strcpy_s(cstr, plaintext.size() + 1, plaintext.c_str());
+        return cstr;
     }
 }
