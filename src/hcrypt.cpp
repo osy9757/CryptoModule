@@ -13,54 +13,53 @@ public:
         std::memcpy(this->key, key, 32); // AES-256 key size is 32 bytes
     }
 
-    std::string encrypt(const std::string &plaintext) {
+    int encrypt(const char *plaintext, char *ciphertext, int ciphertext_len) {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
         int len;
-        int ciphertext_len;
+        int total_len = 0;
         unsigned char iv[16];
-        std::vector<unsigned char> ciphertext(plaintext.size() + AES_BLOCK_SIZE);
 
         // Generate random IV
         RAND_bytes(iv, sizeof(iv));
         EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
-        
+
+        // Copy IV to the beginning of the ciphertext buffer
+        std::memcpy(ciphertext, iv, sizeof(iv));
+        total_len += sizeof(iv);
+
         // Encrypt the plaintext
-        EVP_EncryptUpdate(ctx, ciphertext.data(), &len, reinterpret_cast<const unsigned char*>(plaintext.c_str()), static_cast<int>(plaintext.size()));
-        ciphertext_len = len;
+        EVP_EncryptUpdate(ctx, reinterpret_cast<unsigned char*>(ciphertext + total_len), &len, reinterpret_cast<const unsigned char*>(plaintext), std::strlen(plaintext));
+        total_len += len;
 
         // Finalize encryption
-        EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len);
-        ciphertext_len += len;
+        EVP_EncryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(ciphertext + total_len), &len);
+        total_len += len;
 
         EVP_CIPHER_CTX_free(ctx);
-
-        std::string encrypted(reinterpret_cast<char*>(ciphertext.data()), ciphertext_len);
-        std::string iv_str(reinterpret_cast<char*>(iv), sizeof(iv));
-        return iv_str + encrypted;
+        return total_len;
     }
 
-    std::string decrypt(const std::string &ciphertext) {
+    int decrypt(const char *ciphertext, int ciphertext_len, char *plaintext, int plaintext_len) {
         EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
         int len;
-        int plaintext_len;
-        std::vector<unsigned char> plaintext(ciphertext.size());
+        int total_len = 0;
         unsigned char iv[16];
 
         // Extract IV from ciphertext
-        std::memcpy(iv, ciphertext.c_str(), sizeof(iv));
-        const unsigned char *encrypted = reinterpret_cast<const unsigned char*>(ciphertext.c_str()) + sizeof(iv);
+        std::memcpy(iv, ciphertext, sizeof(iv));
+        const unsigned char *encrypted = reinterpret_cast<const unsigned char*>(ciphertext) + sizeof(iv);
+        int encrypted_len = ciphertext_len - sizeof(iv);
 
         EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), NULL, key, iv);
-        EVP_DecryptUpdate(ctx, plaintext.data(), &len, encrypted, static_cast<int>(ciphertext.size()) - sizeof(iv));
-        plaintext_len = len;
+        EVP_DecryptUpdate(ctx, reinterpret_cast<unsigned char*>(plaintext), &len, encrypted, encrypted_len);
+        total_len += len;
 
         // Finalize decryption
-        EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len);
-        plaintext_len += len;
+        EVP_DecryptFinal_ex(ctx, reinterpret_cast<unsigned char*>(plaintext + total_len), &len);
+        total_len += len;
 
         EVP_CIPHER_CTX_free(ctx);
-
-        return std::string(reinterpret_cast<char*>(plaintext.data()), plaintext_len);
+        return total_len;
     }
 
 private:
@@ -80,17 +79,13 @@ extern "C" {
         aes->setKey(key);
     }
 
-    __declspec(dllexport) char* aes_encrypt(hcrypt* aes, const char* plaintext) {
-        std::string ciphertext = aes->encrypt(plaintext);
-        char* cstr = new char[ciphertext.size() + 1];
-        strcpy_s(cstr, ciphertext.size() + 1, ciphertext.c_str());
-        return cstr;
+    __declspec(dllexport) int aes_encrypt(hcrypt* aes, const char* plaintext, char* ciphertext, int ciphertext_len) {
+        return aes->encrypt(plaintext, ciphertext, ciphertext_len);
     }
 
-    __declspec(dllexport) char* aes_decrypt(hcrypt* aes, const char* ciphertext) {
-        std::string plaintext = aes->decrypt(ciphertext);
-        char* cstr = new char[plaintext.size() + 1];
-        strcpy_s(cstr, plaintext.size() + 1, plaintext.c_str());
-        return cstr;
+    __declspec(dllexport) int aes_decrypt(hcrypt* aes, const char* ciphertext, int ciphertext_len, char* plaintext, int plaintext_len) {
+        return aes->decrypt(ciphertext, ciphertext_len, plaintext, plaintext_len);
     }
 }
+
+//g++ -shared -o hcrypt.dll hcrypt.cpp -I../include -I"C:/Program Files/OpenSSL-Win64/include" -L"C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd" "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd/libssl.lib" "C:/Program Files/OpenSSL-Win64/lib/VC/x64/MTd/libcrypto.lib"
